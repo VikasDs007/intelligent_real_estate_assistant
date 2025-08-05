@@ -1,2 +1,21 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+import streamlit as st
+import pandas as pd
+import utils
+
+st.set_page_config(page_title="Property Explorer", page_icon="🏘️", layout="wide")
+st.title("🏘️ Property Explorer")
+
+all_properties_df = utils.get_all_properties_df()
+
+# --- Sidebar Filters ---
+st.sidebar.header("Search Filters")
+listing_type = st.sidebar.selectbox("Listing Type:", options=all_properties_df['listingtype'].unique(), index=None)
+# ... other filters can be added here ...
+
+# --- Filtering Logic ---
+filtered_df = all_properties_df.copy()
+if listing_type:
+    filtered_df = filtered_df[filtered_df['listingtype'] == listing_type]
+
+st.header("Filtered Property Listings")
+st.dataframe(filtered_df, use_container_width=True)

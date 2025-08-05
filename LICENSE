@@ -19,3 +19,17 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+
+streamlit
+pandas
+numpy
+plotly
+fpdf2
+requests
+sqlite3  # Standard library, but listed for clarity
+pytest
+openpyxl  # For reading Excel files in database_setup.py
+joblib  # For loading ML models
+fastapi
+uvicorn
