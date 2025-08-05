@@ -4,3 +4,4 @@ SQLAlchemy
 numpy
 plotly
 fpdf2
+requests
