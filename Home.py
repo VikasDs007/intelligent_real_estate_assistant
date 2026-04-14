@@ -15,9 +15,77 @@ except Exception as e:
     st.error(f"Error loading data: {e}")
     st.stop()
 
+st.sidebar.header("Quick Jump")
+quick_jump_term = st.sidebar.text_input("Search clients or properties")
+if quick_jump_term:
+    jump_term = quick_jump_term.strip().lower()
+    client_matches = clients_df[
+        clients_df['name'].astype(str).str.contains(jump_term, case=False, na=False) |
+        clients_df['phone'].astype(str).str.contains(jump_term, case=False, na=False) |
+        clients_df['client_id'].astype(str).str.contains(jump_term, case=False, na=False)
+    ].head(5)
+    property_matches = properties_df[
+        properties_df['property_id'].astype(str).str.contains(jump_term, case=False, na=False) |
+        properties_df['arealocality'].astype(str).str.contains(jump_term, case=False, na=False) |
+        properties_df['propertytype'].astype(str).str.contains(jump_term, case=False, na=False)
+    ].head(5)
+
+    if not client_matches.empty:
+        st.sidebar.caption("Clients")
+        for _, row in client_matches.iterrows():
+            if st.sidebar.button(
+                f"Open {row['name']}",
+                key=f"jump_client_{row['client_id']}"
+            ):
+                st.session_state.home_client_jump_id = row['client_id']
+                st.switch_page("pages/2_📈_Client_Management.py")
+
+    if not property_matches.empty:
+        st.sidebar.caption("Properties")
+        for _, row in property_matches.iterrows():
+            label = f"{row.get('propertytype', 'Property')} · {row.get('arealocality', 'Unknown')}"
+            if st.sidebar.button(
+                label,
+                key=f"jump_property_{row['property_id']}"
+            ):
+                st.session_state.home_property_jump_id = row['property_id']
+                st.switch_page("pages/3_🏘️_Property_Explorer.py")
+
 # --- Main Page UI ---
 st.title("🏠 Intelligent Real Estate Dashboard")
 st.markdown("Welcome to your command center. Use the sidebar to navigate.")
+st.markdown(
+    """
+    <div class="hero-banner">
+        <div class="hero-title">Daily Pipeline Snapshot</div>
+        <p class="hero-sub">Prioritize follow-ups, inspect trends, and move active opportunities forward.</p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+st.divider()
+
+st.header("Today at a Glance")
+if 'status' in clients_df.columns:
+    high_priority_count = int(clients_df['status'].isin(["Negotiating", "Site Visit Planned"]).sum())
+    new_leads_count = int(clients_df['status'].eq("New").sum())
+else:
+    high_priority_count = 0
+    new_leads_count = 0
+
+priority_col1, priority_col2, priority_col3 = st.columns(3)
+priority_col1.markdown(
+    f"<div class='kpi-card'><div class='kpi-title'>High Priority Clients</div><p class='kpi-value'>{high_priority_count}</p></div>",
+    unsafe_allow_html=True,
+)
+priority_col2.markdown(
+    f"<div class='kpi-card'><div class='kpi-title'>New Leads</div><p class='kpi-value'>{new_leads_count}</p></div>",
+    unsafe_allow_html=True,
+)
+priority_col3.markdown(
+    f"<div class='kpi-card'><div class='kpi-title'>Total Inventory</div><p class='kpi-value'>{len(properties_df)}</p></div>",
+    unsafe_allow_html=True,
+)
 st.divider()
 
 # --- Action Required: Client Follow-Ups (with Interactive Table) ---
@@ -79,11 +147,14 @@ with st.form("search_form"):
                 clients_df['name'].str.contains(search_term, case=False, na=False) |
                 clients_df['phone'].astype(str).str.contains(search_term, na=False)
             ]
-            st.dataframe(
-                search_results[['name', 'phone', 'status']],
-                use_container_width=True,
-                hide_index=True
-            )
+            if not search_results.empty:
+                st.dataframe(
+                    search_results[['name', 'phone', 'status']],
+                    use_container_width=True,
+                    hide_index=True
+                )
+            else:
+                st.info("No matching clients found. Try part of a phone number, or search by first name.")
         else:
             st.error("Missing required columns for search.")
 st.divider()

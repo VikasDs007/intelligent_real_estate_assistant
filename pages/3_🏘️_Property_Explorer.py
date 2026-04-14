@@ -12,6 +12,8 @@ except Exception as e:
     st.error(f"Error loading properties: {str(e)}")
     all_properties_df = pd.DataFrame()
 
+focused_property_id = st.session_state.get("home_property_jump_id")
+
 st.sidebar.header("Search Filters")
 listing_type = st.sidebar.selectbox(
     "Listing Type:",
@@ -86,6 +88,49 @@ filtered_df = apply_filters(
     price_col, selected_price, selected_amenities
 )
 
+if focused_property_id and focused_property_id not in filtered_df['property_id'].values:
+    focused_row = all_properties_df[all_properties_df['property_id'] == focused_property_id]
+    if not focused_row.empty:
+        filtered_df = pd.concat([focused_row, filtered_df], ignore_index=True)
+
 st.header("Filtered Property Listings")
 st.markdown(f"Found **{len(filtered_df)}** matching properties.")
-st.dataframe(filtered_df, use_container_width=True, hide_index=True)
+st.dataframe(
+    filtered_df,
+    use_container_width=True,
+    hide_index=True,
+    on_select="rerun",
+    selection_mode="single-row",
+    key="property_selection_df"
+)
+
+selected_property = None
+if 'property_selection_df' in st.session_state and st.session_state['property_selection_df']['selection']['rows']:
+    selected_index = st.session_state['property_selection_df']['selection']['rows'][0]
+    selected_property = filtered_df.iloc[selected_index]
+elif focused_property_id and focused_property_id in all_properties_df['property_id'].values:
+    selected_property = all_properties_df[all_properties_df['property_id'] == focused_property_id].iloc[0]
+
+if selected_property is not None:
+    if focused_property_id == selected_property['property_id']:
+        st.info("Opened from Quick Jump. This property is shown for quick review.")
+
+    st.subheader("Property Details")
+    detail_col1, detail_col2 = st.columns([1.2, 1])
+    with detail_col1:
+        st.markdown(f"**{selected_property.get('propertytype', 'Property')}** in **{selected_property.get('arealocality', 'Unknown')}**")
+        st.markdown(f"**Listing Type:** {selected_property.get('listingtype', 'N/A')}")
+        st.markdown(f"**Status:** {selected_property.get('listingstatus', 'N/A')}")
+        if selected_property.get('askingprice'):
+            st.markdown(f"**Asking Price:** ₹{int(float(selected_property.get('askingprice'))):,}")
+        if selected_property.get('monthlyrent'):
+            st.markdown(f"**Monthly Rent:** ₹{int(float(selected_property.get('monthlyrent'))):,}")
+        if selected_property.get('areasqft'):
+            st.markdown(f"**Area:** {selected_property.get('areasqft')} sq.ft.")
+    with detail_col2:
+        st.markdown("**Amenities**")
+        amenities = utils.extract_amenities(selected_property.get('amenities'))
+        if amenities:
+            st.write(", ".join(amenities))
+        else:
+            st.write("No amenities listed.")

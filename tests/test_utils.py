@@ -7,7 +7,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pytest
 import sqlite3
 import utils  # Add this to access the module
-from utils import format_indian_currency, get_recommendations, add_task, find_budget, DB_FILE_PATH  # Add find_budget
+from utils import format_indian_currency, get_recommendations, add_task, find_budget
 
 def test_format_indian_currency():
     assert format_indian_currency(1000000) == '10,00,000'
@@ -19,8 +19,27 @@ def test_find_budget():
     assert find_budget('Rent 5000') == 5000
     assert find_budget('No budget mentioned') == 0
 
-def test_get_recommendations():
-    result = get_recommendations('CL-1001')
+def test_get_recommendations(temp_db):
+    cursor = temp_db.cursor()
+    cursor.execute("ALTER TABLE clients ADD COLUMN name TEXT")
+    cursor.execute("ALTER TABLE clients ADD COLUMN phone TEXT")
+    cursor.execute("ALTER TABLE clients ADD COLUMN email TEXT")
+    cursor.execute("ALTER TABLE clients ADD COLUMN lookingfor TEXT")
+    cursor.execute("ALTER TABLE clients ADD COLUMN requirements TEXT")
+    cursor.execute(
+        "UPDATE clients SET name=?, phone=?, email=?, lookingfor=?, requirements=? WHERE client_id='CL-TEST'",
+        ("Test User", "9876543210", "test@example.com", "Sale", "2 BHK Budget 50L in Mira Road")
+    )
+    cursor.execute(
+        "CREATE TABLE properties (property_id TEXT PRIMARY KEY, listingtype TEXT, bedroomsbhk TEXT, arealocality TEXT, askingprice REAL, monthlyrent REAL)"
+    )
+    cursor.execute(
+        "INSERT INTO properties (property_id, listingtype, bedroomsbhk, arealocality, askingprice, monthlyrent) VALUES (?, ?, ?, ?, ?, ?)",
+        ("SALE-PROP-1001", "Sale", "2 BHK", "Mira Road", 4800000, 0)
+    )
+    temp_db.commit()
+
+    result = get_recommendations('CL-TEST')
     assert isinstance(result, dict)
     assert 'message' in result
     assert 'client_details' in result

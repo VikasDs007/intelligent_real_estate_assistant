@@ -1,15 +1,17 @@
 import pandas as pd
 import re
 import sqlite3
+import logging
 from datetime import datetime
 import os
-import time
 from fpdf import FPDF
 from io import BytesIO
 import requests
 
-DB_FILE_PATH = "real_estate.db"
-MEDIA_DIR = os.path.join("uploads", "media")
+from config import DB_FILE_PATH, MEDIA_DIR
+
+logger = logging.getLogger(__name__)
+
 os.makedirs(MEDIA_DIR, exist_ok=True)
 
 def initialize_database():
@@ -107,19 +109,19 @@ def add_task(client_id, task_type, task_description, due_date, property_id=None,
                 cursor.execute("UPDATE clients SET status = ? WHERE client_id = ?", (new_status, client_id))
             conn.commit()
     except sqlite3.Error as e:
-        print(f"Database error: {e}")
+        logger.exception("Failed to add task for client_id=%s", client_id)
 
 def get_latest_client_event(client_id):
     """Gets the most recent high-priority event to determine the client's real-time status."""
     with sqlite3.connect(DB_FILE_PATH) as conn:
         # Prioritize "Negotiation" then "Site Visit"
-        query = f"""
+        query = """
             SELECT * FROM tasks
-            WHERE client_id = '{client_id}' AND status = 'Pending' AND task_type IN ('Negotiation', 'Site Visit')
+            WHERE client_id = ? AND status = 'Pending' AND task_type IN ('Negotiation', 'Site Visit')
             ORDER BY due_date DESC, CASE task_type WHEN 'Negotiation' THEN 1 WHEN 'Site Visit' THEN 2 ELSE 3 END
             LIMIT 1
         """
-        df = pd.read_sql(query, conn)
+        df = pd.read_sql(query, conn, params=(client_id,))
         return df.iloc[0] if not df.empty else None
 
 # (All other functions from get_all_clients_df to PDF generation are unchanged and correct)
@@ -156,7 +158,11 @@ def add_communication_note(client_id, note):
         cursor = conn.cursor(); cursor.execute("INSERT INTO communication_log (client_id, timestamp, note) VALUES (?, ?, ?)", (client_id, timestamp, note)); conn.commit()
 def get_communication_log(client_id):
     with sqlite3.connect(DB_FILE_PATH) as conn:
-        return pd.read_sql(f"SELECT timestamp, note FROM communication_log WHERE client_id = '{client_id}' ORDER BY timestamp DESC", conn)
+        return pd.read_sql(
+            "SELECT timestamp, note FROM communication_log WHERE client_id = ? ORDER BY timestamp DESC",
+            conn,
+            params=(client_id,)
+        )
 def get_all_properties_df():
     with sqlite3.connect(DB_FILE_PATH) as conn: return pd.read_sql("SELECT * FROM properties", conn)
 def save_uploaded_file(uploaded_file, property_id, media_type, index):
@@ -210,7 +216,9 @@ def get_clients_with_scores():
     clients_df[['score', 'rating']] = pd.DataFrame(scores_and_ratings.tolist(), index=clients_df.index)
     return clients_df.sort_values(by='score', ascending=False)
 def get_recommendations(client_id):
-    client_df = get_all_clients_df().query(f"client_id == '{client_id}'"); properties_df = get_all_properties_df()
+    with sqlite3.connect(DB_FILE_PATH) as conn:
+        client_df = pd.read_sql("SELECT * FROM clients WHERE client_id = ?", conn, params=(client_id,))
+    properties_df = get_all_properties_df()
     if client_df.empty: return {"message": "Client not found.", "recommendations": []}
     client_data = client_df.iloc[0]
     req_budget = find_budget(client_data['requirements'])
@@ -258,8 +266,14 @@ def generate_property_report(client_details, recommendations):
         pdf.set_font('Arial', 'B', 11); prop_title = f"{prop.get('bedroomsbhk', '')} {prop.get('propertytype', '')} in {prop.get('arealocality', '')}"; pdf.cell(0, 10, sanitize_text(prop_title), 0, 1, 'L')
         y_before_block = pdf.get_y()
         try:
-            image_url = get_property_images(prop.get('propertytype'))[0]; response = requests.get(image_url); img = BytesIO(response.content); pdf.image(img, x=pdf.get_x(), y=y_before_block, w=image_width)
-        except Exception: pdf.rect(x=pdf.get_x(), y=y_before_block, w=image_width, h=53)
+            image_url = get_property_images(prop.get('propertytype'))[0]
+            response = requests.get(image_url, timeout=5)
+            response.raise_for_status()
+            img = BytesIO(response.content)
+            pdf.image(img, x=pdf.get_x(), y=y_before_block, w=image_width)
+        except Exception:
+            logger.warning("Image fetch failed for report. Falling back to placeholder box.", exc_info=True)
+            pdf.rect(x=pdf.get_x(), y=y_before_block, w=image_width, h=53)
         pdf.set_xy(pdf.get_x() + image_width + 5, y_before_block); pdf.set_font('Arial', '', 9); price_text = ""
         if client_details.get('lookingfor') == 'Sale' and prop.get('askingprice'): price_text = f"Asking Price: Rs. {format_indian_currency(prop.get('askingprice'))}"
         elif client_details.get('lookingfor') == 'Rent' and prop.get('monthlyrent'): price_text = f"Monthly Rent: Rs. {format_indian_currency(prop.get('monthlyrent'))} / month"

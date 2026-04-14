@@ -1,7 +1,12 @@
 import os
 import re
 import sqlite3
+import logging
 import pandas as pd
+
+from config import DB_FILE_PATH
+
+logger = logging.getLogger(__name__)
 
 
 def clean_col_names(df):
@@ -12,20 +17,20 @@ def clean_col_names(df):
     return df
 
 
-def setup_database(excel_file_path='data/Real_Estate_data.xlsx', db_file_path='real_estate.db'):
+def setup_database(excel_file_path='data/Real_Estate_data.xlsx', db_file_path=DB_FILE_PATH):
     """
     Initializes the SQLite database.
     - Creates tables for clients and properties.
     - Loads initial data from the Excel file.
     """
-    print("--- Starting Database Setup ---")
+    logger.info("Starting database setup")
 
     if not os.path.exists(excel_file_path):
         raise FileNotFoundError(f"Excel file not found at {excel_file_path}")
 
     # Connect to the SQLite database (this will create the file if it doesn't exist)
     conn = sqlite3.connect(db_file_path)
-    print(f"Connected to database at '{db_file_path}'")
+    logger.info("Connected to database at '%s'", db_file_path)
 
     # --- Load and Clean Data from Excel ---
     # Load and clean clients data
@@ -55,19 +60,18 @@ def setup_database(excel_file_path='data/Real_Estate_data.xlsx', db_file_path='r
         # The 'if_exists='replace'' will drop the table first if it exists and create a new one.
         # This is useful for re-running the script during development.
         clients_df.to_sql('clients', conn, if_exists='replace', index=False)
-        print("Successfully created 'clients' table and loaded data.")
+        logger.info("Created 'clients' table and loaded data")
 
         properties_df.to_sql('properties', conn, if_exists='replace', index=False)
-        print("Successfully created 'properties' table and loaded data.")
+        logger.info("Created 'properties' table and loaded data")
     except Exception as e:
-        print(f"An error occurred: {e}")
+        logger.exception("Database setup failed while writing tables")
     finally:
         # Close the connection
         conn.close()
-        print("Database connection closed.")
+        logger.info("Database connection closed")
 
 
 if __name__ == "__main__":
     setup_database()
-    print("\n--- Database setup is complete! ---")
-    print("A new file 'real_estate.db' should now be in your project folder.")
+    logger.info("Database setup complete")

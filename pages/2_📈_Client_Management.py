@@ -21,6 +21,8 @@ except Exception as e:
     st.error(f"Error loading clients: {str(e)}")
     clients_df = pd.DataFrame()
 
+focused_client_id = st.session_state.get("home_client_jump_id")
+
 tab1, tab2 = st.tabs(["**Manage Existing Clients**", "**➕ Add New Client**"])
 
 with tab1:
@@ -51,6 +53,18 @@ with tab1:
             filtered_clients_df['lookingfor'] == looking_for_filter
         ]
 
+    if focused_client_id and focused_client_id not in filtered_clients_df['client_id'].values:
+        focused_row = clients_df[clients_df['client_id'] == focused_client_id]
+        if not focused_row.empty:
+            filtered_clients_df = pd.concat([focused_row, filtered_clients_df], ignore_index=True)
+
+    detail_client_id = None
+    if 'client_selection_df' in st.session_state and st.session_state['client_selection_df']['selection']['rows']:
+        selected_index = st.session_state['client_selection_df']['selection']['rows'][0]
+        detail_client_id = filtered_clients_df.iloc[selected_index]['client_id']
+    elif focused_client_id and focused_client_id in clients_df['client_id'].values:
+        detail_client_id = focused_client_id
+
     st.dataframe(
         filtered_clients_df[['rating', 'name', 'status', 'lookingfor']],
         use_container_width=True,
@@ -60,10 +74,12 @@ with tab1:
         key="client_selection_df"
     )
 
-    if 'client_selection_df' in st.session_state and st.session_state['client_selection_df']['selection']['rows']:
-        selected_index = st.session_state['client_selection_df']['selection']['rows'][0]
-        selected_client_id = filtered_clients_df.iloc[selected_index]['client_id']
+    if detail_client_id:
+        selected_client_id = detail_client_id
         selected_client = clients_df[clients_df['client_id'] == selected_client_id].iloc[0]
+
+        if focused_client_id == selected_client_id:
+            st.info("Opened from Quick Jump. You can now review or refine this client's record.")
 
         st.divider()
         st.header(f"Client Profile: {selected_client['name']}")
@@ -132,7 +148,6 @@ with tab1:
             st.divider()
             if st.button(
                 "🗑️ Delete Client",
-                type="primary",
                 key=f"delete_{selected_client_id}"
             ):
                 utils.delete_client_by_id(selected_client_id)

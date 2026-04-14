@@ -1,58 +1,140 @@
+# Intelligent Real Estate Assistant
 
-# Intelligent Real Estate Assistant 🏠
+An end-to-end real estate workflow app for agents, built with FastAPI + Streamlit.
 
-This project is a full-stack web application designed to serve as an all-in-one management tool for real estate agents. It replaces traditional Excel-based workflows with a modern, database-driven application featuring an AI-powered recommendation engine and a complete client management system.
+It combines:
+- client CRM and follow-up tracking
+- property inventory browsing and filtering
+- recommendation workflows for client-property matching
+- a conversational AI assistant that can answer questions and trigger actions
 
-The application is built with a **FastAPI** backend to handle data logic and a **Streamlit** multi-page frontend for a user-friendly, interactive experience.
+## Features
 
----
+- Dashboard with priority and portfolio visibility
+- Client management (create, read, update, delete)
+- Property explorer with advanced filtering
+- Recommendation page with match suggestions and PDF export
+- Task manager for follow-ups, site visits, and negotiations
+- Market analysis charts
+- AI assistant page with GPT-style chat interface
+  - summarize clients/properties/tasks
+  - fetch details by name or id
+  - add notes from chat
+  - create follow-up tasks from chat
+  - open linked client/property pages from chat actions
 
-## ✨ Features
+## Tech Stack
 
-This application provides a comprehensive suite of tools for real estate agents:
+- Backend: FastAPI, Uvicorn
+- Frontend: Streamlit multipage app
+- Data: Pandas, SQLite
+- Utilities: Requests, FPDF
+- Testing: Pytest
 
-* **🏠 Main Dashboard:** An "At a Glance" homepage showing key metrics like total clients, active listings, and client needs.
-* **🤝 AI Recommendation Engine:** Select any client to instantly receive a list of the top matching properties from the database. The engine uses a smart fallback system, first searching by location and then expanding the search if no perfect matches are found.
-* **📈 Full Client Management (CRUD):** A dedicated page with a modern tabbed interface to:
-  * **Create:** Add new clients to the database through a simple form.
-  * **Read:** View all client details and requirements.
-  * **Update:** Edit existing client information.
-  * **Delete:** Safely remove clients with a confirmation step.
-* **🏘️ Interactive Property Explorer:** A powerful dashboard to browse, search, and filter the entire property inventory by listing type, property type, location, and price range.
-* **📅 Task Management:** Add, view, and update tasks/events for clients, such as site visits and negotiations, with automatic client status updates.
-* **📊 Market Analysis:** (If implemented) Tools for property price prediction and data visualization.
-* **Testing:** Comprehensive unit tests for utility functions using pytest to ensure reliability.
+## Project Structure
 
----
+- `app.py`: launcher that starts API + Streamlit
+- `api.py`: REST API endpoints
+- `assistant_engine.py`: chat intent handling, context building, optional model calls, command execution helpers
+- `utils.py`: database and helper functions
+- `pages/`: Streamlit pages
+- `tests/`: test suite
 
-## 🛠️ Tech Stack
+## Setup
 
-This project leverages a modern Python-based stack for data science and web development:
+### 1. Clone and enter project
 
-* **Backend:**
-  * **FastAPI:** For creating a high-performance, robust REST API.
-  * **Uvicorn:** As the ASGI server to run the FastAPI application.
-* **Frontend:**
-  * **Streamlit:** For building a beautiful, interactive multi-page user interface purely in Python.
-* **Data & ML:**
-  * **Pandas:** For all data manipulation and preparation tasks.
-  * **Scikit-learn:** For machine learning model training and evaluation (used for the price prediction model prototype).
-  * **Joblib:** For model serialization.
-* **Database:**
-  * **SQLite:** As a lightweight, file-based database.
-* **Other:**
-  * **Requests:** For handling external API calls (e.g., image fetching).
-  * **FPDF:** For generating PDF reports.
-  * **Pytest:** For unit testing.
+```bash
+git clone <your-repository-url>
+cd intelligent_real_estate_assistant
+```
 
----
+### 2. Create and activate virtual environment
 
-## 🚀 How to Run Locally
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
 
-To run this project on your local machine, please follow these steps:
+### 3. Install dependencies
 
-1. **Clone the Repository:**
-   ```bash
-   git clone [your-repository-url]
-   cd [your-repository-folder]
-   ```
+```bash
+python3 -m pip install -r requirements.txt
+```
+
+### 4. (Optional) Rebuild database from Excel source
+
+```bash
+python3 database_setup.py
+```
+
+## Run the App
+
+### Recommended: run full launcher
+
+```bash
+python3 app.py
+```
+
+This starts:
+- FastAPI on `http://127.0.0.1:8000`
+- Streamlit on `http://127.0.0.1:8501`
+
+### Alternative: run Streamlit directly
+
+```bash
+python3 -m streamlit run Home.py
+```
+
+## AI Assistant Configuration
+
+The assistant works in local smart mode by default (no external model key required).
+
+To enable model-backed responses, set environment variables:
+
+```bash
+export REAL_ESTATE_AI_API_KEY="<your_api_key>"
+export REAL_ESTATE_AI_MODEL="gpt-4o-mini"
+# Optional if using a custom endpoint
+export REAL_ESTATE_AI_BASE_URL="https://api.openai.com/v1"
+```
+
+Supported config keys are defined in `config.py`.
+
+## GPT-Style Assistant Usage
+
+Go to the AI assistant page in the app and try commands like:
+
+- `show client CL-1001`
+- `show asha`
+- `add note for CL-1001: call tomorrow`
+- `create task for CL-1001 tomorrow: site visit`
+- `open property SALE-PROP-1001`
+- `summarize market activity`
+
+The assistant can:
+- infer context from selected client/property
+- perform direct actions from chat
+- offer inline action buttons for common next steps
+
+## Run Tests
+
+```bash
+python3 -m pytest -q
+```
+
+## Current Validation Status
+
+Latest local run:
+- compile checks passed
+- test suite passing
+
+## Notes
+
+- `real_estate.db` is used as the default SQLite file.
+- You can override paths and ports with environment variables in `config.py`.
+- If port `8501` is busy, close existing Streamlit process or run on another port.
+
+## License
+
+MIT (see `LICENSE`)

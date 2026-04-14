@@ -1,28 +1,64 @@
 import re
 import sqlite3
-from pydantic import BaseModel
+import logging
+from typing import Any, Dict, List, Literal, Optional
+
+from pydantic import BaseModel, Field, field_validator
 import pandas as pd
 from fastapi import FastAPI, HTTPException
 
-DB_FILE_PATH = "real_estate.db"
+from config import DB_FILE_PATH
+
+logger = logging.getLogger(__name__)
 
 api_app = FastAPI(title="Real Estate API")
 
+
+class ClientSummary(BaseModel):
+    client_id: str
+    name: str
+
+
+class RecommendationResponse(BaseModel):
+    message: str
+    client_details: Optional[Dict[str, Any]] = None
+    recommendations: List[Dict[str, Any]]
+
+
+class MessageResponse(BaseModel):
+    message: str
+    client_id: str
+
+
 class ClientUpdate(BaseModel):
     name: str
-    phone: str
-    email: str
-    looking_for: str
+    phone: str = Field(pattern=r"^\+?\d{10,15}$")
+    email: str = Field(min_length=5, max_length=254)
+    looking_for: Literal["Sale", "Rent"]
     requirements: str
-    status: str
+    status: Literal["New", "Site Visit Planned", "Negotiating", "Converted", "Closed Lost"]
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", value):
+            raise ValueError("Invalid email format")
+        return value
 
 
 class ClientCreate(BaseModel):
     name: str
-    phone: str
-    email: str
-    looking_for: str
+    phone: str = Field(pattern=r"^\+?\d{10,15}$")
+    email: str = Field(min_length=5, max_length=254)
+    looking_for: Literal["Sale", "Rent"]
     requirements: str
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", value):
+            raise ValueError("Invalid email format")
+        return value
 
 
 @api_app.get("/")
@@ -30,24 +66,30 @@ def read_root():
     return {"status": "ok", "message": "API is running"}
 
 
-@api_app.get("/clients")
+@api_app.get("/clients", response_model=List[ClientSummary])
 def get_all_clients():
     try:
         with sqlite3.connect(DB_FILE_PATH) as conn:
             return pd.read_sql("SELECT client_id, name FROM clients", conn).to_dict(orient='records')
     except Exception as e:
+        logger.exception("Failed to fetch clients")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
-@api_app.get("/clients/{client_id}")
+@api_app.get("/clients/{client_id}", response_model=Dict[str, Any])
 def get_client_details(client_id: str):
     with sqlite3.connect(DB_FILE_PATH) as conn:
-        client_details = pd.read_sql(f"SELECT * FROM clients WHERE client_id = '{client_id}'", conn)
-        if client_details.empty: raise HTTPException(status_code=404, detail="Client not found")
+        client_details = pd.read_sql(
+            "SELECT * FROM clients WHERE client_id = ?",
+            conn,
+            params=(client_id,)
+        )
+        if client_details.empty:
+            raise HTTPException(status_code=404, detail="Client not found")
         return client_details.iloc[0].to_dict()
 
 
-@api_app.post("/clients")
+@api_app.post("/clients", response_model=MessageResponse)
 def create_client(client: ClientCreate):
     with sqlite3.connect(DB_FILE_PATH) as conn:
         cursor = conn.cursor()
@@ -59,31 +101,37 @@ def create_client(client: ClientCreate):
         return {"message": "Client added successfully!", "client_id": new_client_id}
 
 
-@api_app.put("/clients/{client_id}")
+@api_app.put("/clients/{client_id}", response_model=MessageResponse)
 def update_client(client_id: str, client: ClientUpdate):
     with sqlite3.connect(DB_FILE_PATH) as conn:
         cursor = conn.cursor()
         cursor.execute("UPDATE clients SET name=?, phone=?, email=?, lookingfor=?, requirements=?, status=? WHERE client_id=?", (client.name, client.phone, client.email, client.looking_for, client.requirements, client.status, client_id))
         conn.commit()
-        if cursor.rowcount == 0: raise HTTPException(status_code=404, detail="Client not found")
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Client not found")
         return {"message": "Client updated successfully!", "client_id": client_id}
 
 
-@api_app.delete("/clients/{client_id}")
+@api_app.delete("/clients/{client_id}", response_model=MessageResponse)
 def delete_client(client_id: str):
     with sqlite3.connect(DB_FILE_PATH) as conn:
         cursor = conn.cursor()
         cursor.execute("DELETE FROM clients WHERE client_id = ?", (client_id,))
         conn.commit()
-        if cursor.rowcount == 0: raise HTTPException(status_code=404, detail="Client not found")
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Client not found")
         return {"message": "Client deleted successfully!", "client_id": client_id}
 
 
-@api_app.get("/recommendations/{client_id}")
+@api_app.get("/recommendations/{client_id}", response_model=RecommendationResponse)
 def get_recommendations_for_client(client_id: str):
     try:
         with sqlite3.connect(DB_FILE_PATH) as conn:
-            clients_df = pd.read_sql(f"SELECT * FROM clients WHERE client_id = '{client_id}'", conn)
+            clients_df = pd.read_sql(
+                "SELECT * FROM clients WHERE client_id = ?",
+                conn,
+                params=(client_id,)
+            )
             properties_df = pd.read_sql("SELECT * FROM properties", conn)
         if clients_df.empty:
             raise HTTPException(status_code=404, detail="Client not found.")
@@ -128,5 +176,8 @@ def get_recommendations_for_client(client_id: str):
             return {"message": "No suitable properties found.", "recommendations": []}
         results = final_matches.head(5).to_dict(orient='records')
         return {"message": message, "client_details": client_data.to_dict(), "recommendations": results}
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.exception("Failed generating recommendations for client_id=%s", client_id)
         raise HTTPException(status_code=500, detail=f"Error generating recommendations: {str(e)}")
