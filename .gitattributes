@@ -1,21 +1,14 @@
-import streamlit as st
-import pandas as pd
-import utils
+# Normalize text files
+* text=auto eol=lf
 
-st.set_page_config(page_title="Property Explorer", page_icon="🏘️", layout="wide")
-st.title("🏘️ Property Explorer")
+# Treat common binary artifacts correctly
+*.db binary
+*.joblib binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
 
-all_properties_df = utils.get_all_properties_df()
-
-# --- Sidebar Filters ---
-st.sidebar.header("Search Filters")
-listing_type = st.sidebar.selectbox("Listing Type:", options=all_properties_df['listingtype'].unique(), index=None)
-# ... other filters can be added here ...
-
-# --- Filtering Logic ---
-filtered_df = all_properties_df.copy()
-if listing_type:
-    filtered_df = filtered_df[filtered_df['listingtype'] == listing_type]
-
-st.header("Filtered Property Listings")
-st.dataframe(filtered_df, use_container_width=True)
+# Keep notebooks as text (json)
+*.ipynb text
